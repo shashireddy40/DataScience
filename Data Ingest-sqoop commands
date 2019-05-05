@@ -1,0 +1,658 @@
+
+Data Ingestion – Apache Sqoop
+
+
+Introduction and Objectives
+Accessing Sqoop Documentation
+Preview of MySQL on labs
+Sqoop connect string and validating using list commands
+Run queries in MySQL using eval
+Sqoop Import – Simple Import
+Sqoop Import – Execution Life Cycle
+Sqoop Import – Managing Directories
+Sqoop Import – Using split by
+Sqoop Import – auto reset to one mapper
+Sqoop Import – Different file formats
+Sqoop Import – Using compression
+Sqoop Import – Using Boundary Query
+Sqoop Import – columns and query
+Sqoop Import – Delimiters and handling nulls
+Sqoop Import – Incremental Loads
+Sqoop Import – Hive – Create Hive Database
+Sqoop Import – Hive – Simple Hive Import
+Sqoop Import – Hive – Managing Hive tables
+Sqoop Import – Import all tables
+Role of Sqoop in a typical data processing lifecycle
+Sqoop Export – Simple export with delimiters
+Sqoop Export – Understanding export behavior
+Sqoop Export – Column Mapping
+Sqoop Export – Update and Upsert
+Sqoop Export – Stage Tables
+=====================================================================================================
+path in hdfs 
+/user/shashireddy408417/cca175/data-master
+
+=====================================================================================================
+
+Data Ingest-sqoop
+
+As part of this topic, let us get into how to get started with sqoop
+
+Connect String
+Giving the password
+Listing databases
+Listing tables
+Connect string
+Almost all sqoop commands use connect string using.--connect It requires the following information:
+
+Database type (MySQL, Oracle etc)
+Hostname
+Port number
+Database Name (in case of MySQL)
+===========================================================================================
+
+Sqoop list commands
+Sqoop list, facilitate us to see a list of databases or tables from the database.
+
+sqoop list-databases --connect "jdbc:mysql://ip-172-31-20-247:3306" \
+--username sqoopuser \
+--password NHkkP876rp
+
+sqoop list-tables --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+--username sqoopuser \
+--password NHkkP876rp
+===========================================================================================
+
+Run queries using Sqoop eval
+Running Queries – We can use eval to run queries on remote databases
+Any valid SQL query or command can be run using sqoop eval. It is primarily used to load or query log tables while running Sqoop jobs at regular intervals.
+
+sqoop eval \
+  --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --query "SELECT * FROM order_items LIMIT 10"
+
+sqoop eval \
+  --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --query "INSERT INTO orders VALUES (100000, '2017-10-31 00:00:00.0', 100000, 'DUMMY')"
+
+sqoop eval \
+  --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --query "CREATE TABLE dummy (i INT)"
+
+sqoop eval \
+  --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --query "INSERT INTO dummy VALUES (1)"
+
+sqoop eval \
+  --connect "jdbc:mysql://ip-172-31-20-247:3306"/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --query "SELECT * FROM dummy"
+
+  ============================================================================
+
+Importing Data
+Simple import
+Execution life cycle
+Number of mappers
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --target-dir /user/shashireddy408417/cca175/data-master/t_d
+
+  ============================================================================
+
+  Execution Life Cycle
+Here is the execution lifecycle of Sqoop.
+
+Connect to the source database and get metadata
+Generate java file with metadata and compile to a jar file
+Apply boundaryvalsquery to apply split logic, default 4
+Use split boundaries to issue queries against the source database
+Each thread will have a different connection to issue the query
+Each thread will get a mutually exclusive subset of the data
+Data will be written to HDFS in a separate file per thread
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 1 \
+  --delete-target-dir
+
+ sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 1 \
+  --append
+
+  =====================================================================================
+
+Managing Directories
+By default sqoop import fails if target directory already exists
+Directory can be overwritten by using –delete-target-dir
+Data can be appended to existing directories by saying –append
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 1 \
+  --delete-target-dir
+
+ sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 1 \
+  --append
+
+ ============================================================================================
+
+Importing Data
+Number of mappers
+Splitting using a custom column
+Splitting using non-numeric column
+Let us explore how we can customize split logic
+
+By default number of mappers is 4, it can be changed with –num-mappers
+Split logic will be applied to a primary key if exists
+If primary key does not exist and if we use a number of mappers more than 1, then sqoop import will fail
+At that time we can use –split-by to split on a non-key column or explicitly set –num-mappers to 1 or use –auto-reset-to-one-mapper
+If the primary key column or the column specified in split-by clause is non numeric type, then we need to use this additional argument -Dorg.apache.sqoop.splitter.allow_text_splitter=true
+
+Using split-by
+
+For performance, reason choose a column which is indexed as part of the split-by clause
+If there are null values in the column, corresponding records from the table will be ignored
+Data in the split-by column need not be unique, but if there are duplicates then there can be a skew in the data while importing (which means some files might be relatively bigger compared to other files)
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items_nopk \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --split-by order_item_order_id
+  
+#Splitting on text field
+sqoop import \
+  -Dorg.apache.sqoop.splitter.allow_text_splitter=true \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table orders \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --split-by order_status
+
+  ======================================================================================
+
+  Auto Reset to One Mapper
+If a table does not have a primary key defined and the --split-by <col> is not provided, then import will fail unless the number of mappers is explicitly set to one with the --num-mappers 1 option or the --autoreset-to-one-mapper option is used. The option --autoreset-to-one-mapper is typically used with the import-all-tables tool to automatically handle tables without a primary key in a schema.
+
+sqoop import \
+ --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+ --username sqoopuser \
+ --password NHkkP876rp \
+ --table order_items_nopk \
+ --warehouse-dir /user/shashireddy408417/cca175/data-master \
+ --autoreset-to-one-mapper
+We can check using below command
+
+hadoop fs -ls /user/shashireddy408417/cca175/data-master/order_items_nopk
+
+========================================================================================
+
+As part of this topic, we will start looking into file formats.
+
+While importing data using Sqoop we can save data into different file formats. We can also specify compression codecs while importing the data.
+
+File formats
+Text file (default)
+Sequence file
+Avro file
+Parquet file
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 2 \
+  --as-sequencefile
+
+  ===============================================================================
+
+
+  As part of this topic, we will talk about Compression Algorithms
+
+Compression algorithms
+Gzip
+Deflate
+Snappy
+Others
+Compression
+Following are the steps to use compression.
+
+Go to /etc/hadoop/conf and check core-site.xml for supported compression codecs
+Use –compress to enable compression
+If compression codec is not specified, it will use gzip by default
+Compression algorithm can be specified using compression-codec
+To uncompress the file use the command gunzip.
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 2 \
+  --as-textfile \
+  --compress \
+  --compression-codec org.apache.hadoop.io.compress.GzipCodec
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 2 \
+  --as-textfile \
+  --compress \
+  --compression-codec org.apache.hadoop.io.compress.SnappyCodec
+
+  ===========================================================================================
+
+  What is Boundary Value Query in Sqoop
+Sqoop runs it mapper task by executing the SQL like SELECT * FROM table WHERE id >= low AND id < high. Sqoop uses query select minimum value for splitting, a maximum value for splitting to find out boundaries for creating splits. This Sqoop operation is known as Boundary Value Query.
+
+sqoop import \
+--connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+--username sqoopuser \
+--password NHkkP876rp \
+--table order_items \
+--warehouse-dir /user/dgadiraju/sqoop_import/reatil_db \
+--boundary-query 'select min(order_item_id), max(order_item_id) from order_items where order_item_id > 99999'
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --boundary-query 'select 100000, 172198'
+
+
+  =============================================================================================
+
+  Sqoop Import – columns and query
+  As part of this topic, we will talk about Transformations and filtering in Sqoop.
+
+Boundary Query
+Transformations and filtering
+Columns
+Query
+
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --columns order_item_order_id,order_item_id,order_item_subtotal \
+  --warehouse-dir /user/shashireddy408417/cca175/data-master \
+  --num-mappers 2
+
+  sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --target-dir /user/shashireddy408417/cca175/data-master/orders_with_revenue \
+  --num-mappers 2 \
+  --query "select o.*, sum(oi.order_item_subtotal) order_revenue from orders o join order_items oi on o.order_id = oi.order_item_order_id and \$CONDITIONS group by o.order_id, o.order_date, o.order_customer_id, o.order_status" \
+  --split-by order_id
+
+
+  ====================================================================================
+
+  Sqoop Import – Delimiters and handling nulls
+
+  Let us get into controlling the imports
+
+Specifying delimiters
+Handling nulls
+Delimiters and handling nulls
+#Default behavior
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/hr_db \
+  --username hr_user \
+  --password NHkkP876rp \
+  --table employees \
+  --warehouse-dir /user/dgadiraju/sqoop_import/hr_db
+  
+#Changing default delimiters and nulls
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/hr_db \
+  --username hr_user \
+  --password NHkkP876rp \
+  --table employees \
+  --warehouse-dir /user/dgadiraju/sqoop_import/hr_db \
+  --null-non-string -1 \
+  --fields-terminated-by "\000" \
+  --lines-terminated-by ":"
+
+ =====================================================================================
+ Sqoop Import – Incremental Loads
+
+ Incremental loads can be performed using
+
+query
+where
+Standard incremental loads
+
+# Baseline import
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --target-dir /user/shashireddy408417/cca175/data-master/orders \
+  --num-mappers 2 \
+  --query "select * from orders where \$CONDITIONS and order_date like '2013-%'" \
+  --split-by order_id
+
+# Query can be used to load data based on condition
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --target-dir /user/shashireddy408417/cca175/data-master/orders \
+  --num-mappers 2 \
+  --query "select * from orders where \$CONDITIONS and order_date like '2014-01%'" \
+  --split-by order_id \
+  --append
+
+# where in conjunction with table can be used to get data based up on a condition
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --target-dir /user/shashireddy408417/cca175/data-master/orders \
+  --num-mappers 2 \
+  --table orders \
+  --where "order_date like '2014-02%'" \
+  --append
+
+# Incremental load using arguments specific to incremental load
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --target-dir /user/shashireddy408417/cca175/data-master/orders \
+  --num-mappers 2 \
+  --table orders \
+  --check-column order_date \
+  --incremental append \
+  --last-value '2014-02-28'
+
+
+  ========================================================================================
+
+  Sqoop Import – Hive – Create Hive Database
+
+  Sqoop provides several features to get data into Hive tables
+
+Create empty hive table
+Create new hive table and load into it
+Copy data into existing hive table
+and more
+Create Database
+Before getting into Hive import, it is better to create a Hive database to explore the features of Sqoop import into Hive.
+
+Simple Hive Import
+Let us see simple Hive import
+
+–hive-import will enable hive-import. It creates table if it does not already exist
+–hive-database can be used to specify the database
+Instead of –hive-database, we can use database name as a prefix as part of –hive-table
+sqoop import \
+  --connect jdbc:mysql://ip-172-31-20-247:3306/retail_db \
+  --username sqoopuser \
+  --password NHkkP876rp \
+  --table order_items \
+  --hive-import \
+  --hive-database dgadiraju_sqoop_import \
+  --hive-table order_items \
+  --num-mappers 2
+
+ =========================================================================================
+ Sqoop Import – Hive – Managing Hive tables
+
+Managing Tables
+Default hive import behavior
+Create table if the table does not exist
+If the table already exists, data will be appended
+–create-hive-table will fail hive import if the table already exists
+–hive-overwrite will replace existing data with a new set of data
+
+Sqoop provides the capability to import all the tables using import-all-tables
+
+All the tables from a schema/database can be imported
+–exclude-tables, will facilitate to exclude the tables that need not be imported
+–auto-reset-to-one-mapper, will let import all tables to choose one mapper in case table does not have the primary key
+Most of the features such as –query, –boundary-query, –where etc are not available with import-all-tables.
+
+===========================================================================================
+
+Role of Sqoop in typical data processing life cycle
+
+Role of Sqoop
+Data Ingestion (using Sqoop – one of the approaches)
+Process data
+Visualize the processed data
+Connect BI/Visualization tools to HDFS directly
+Port the processed data to a database
+Sqoop export will help you in porting the process data to a database
+
+
+create table daily_revenue as
+select order_date, sum(order_item_subtotal) daily_revenue
+from orders join order_items on
+order_id = order_item_order_id
+where order_date like '2013-07%'
+group by order_date;
+
+===========================================================================================
+
+
+Sqoop Export – Simple export with delimiters
+
+As part of this topic, we will run a simple export with delimiters
+
+Simple export – following are the arguments we need to pass
+--connect with JDBC connect string. It should include target database
+--username and --passwordthe user should have write permission on the table into which data is being exported
+--table, target table in the relational database such as MySQL into which data need to be copied
+--export-dir from which data need to be copied
+Delimiters
+Sqoop by default expect “,” to be a field delimiter
+But Hive default delimiter is Ascii 1 (\001)
+--input-fields-terminated-by can be used to pass the delimiting character
+Export Behavior
+Read data from the export directory
+By default, Sqoop export uses 4 parallel threads to read the data by using Map Reduce split logic (based upon HDFS block size)
+Each thread establishes database connection using JDBC URL, username and password
+Generated insert statement to load data into the target table
+Issues insert statements in the target table using connection established per thread (or mapper)
+Number of mappers – we can increase or decrease the number of threads by using –-num-mappers or -m
+
+
+Create a table in MySql
+Use database retail_export if you want to create the tables and export the data
+
+create table daily_revenue(
+  order_date varchar(30),
+  revenue float
+);
+
+sqoop export \
+ --connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+ --username retail_user \
+ --password itversity \
+ --export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \
+ --table daily_revenue \
+ --input-fields-terminated-by "\001"
+
+============================================================================
+
+Export Behavior
+Read data from the export directory
+By default, Sqoop export uses 4 parallel threads to read the data by using Map Reduce split logic (based upon HDFS block size)
+Each thread establishes database connection using JDBC URL, username and password
+Generated insert statement to load data into a target table
+Issues insert statements in the target table using connection established per thread (or mapper)
+
+
+===============================================================================
+
+Sqoop Export – Column Mapping
+
+Let us see the rationale behind column mapping while exporting the data
+
+Sometimes the structure of data in HDFS and structure of the table in MySQL into which data need to be exported need not match exactly
+There is no way we can change the order of columns in our input data and we have to consume every column
+However, Sqoop export gives the flexibility to map all the columns to target table columns in the order of data in HDFS. For e.g.
+HDFS data structure – order_date and revenue
+MySQL target table – revenue, order_date and description
+There is no description in HDFS and hence description in target table should be nullable
+--columns order_date,revenuewill make sure data is populated with revenue and order_date in the target table.
+
+create table daily_revenue_demo (
+     revenue float,
+     order_date varchar(30),
+     description varchar(200)
+);
+
+
+sqoop export \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+--username retail_user \
+--password itversity \
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \
+--table daily_revenue_demo \
+--columns order_date,revenue \
+--input-fields-terminated-by "\001" \
+--num-mappers 1
+
+==================================================================================================
+Sqoop Export – Update and Upsert
+
+As part of this topic, we will explore about Update and Upsert
+
+Exporting Data
+Update and Upsert/Merge
+create table daily_revenue (
+ order_date varchar(30) primary key,
+ revenue float
+);
+sqoop export \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+--username retail_user \
+--password itversity \
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \
+--table daily_revenue \
+--input-fields-terminated-by "\001" \
+--num-mappers 1
+Sqoop Export – Update
+inser into table daily_revenue
+ select order_date, sum(order_item_subtotal) daily_revenue
+ from orders join order_items on
+ order_id = order_item_order_id
+ where order_date like '2013-07%'
+ group by order_date;
+Update the table
+update daily_revenue set revenue = 0;
+
+sqoop export \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+--username retail_user \
+--password itversity \
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \
+--table daily_revenue \
+--update-key order_date \
+--input-fields-terminated-by "\001" \
+--num-mappers 1
+Upsert the table
+sqoop export \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_export \
+--username retail_user \
+--password itversity \
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \
+--table daily_revenue \
+--update-key order_date \
+--update-mode allowinsert \
+--input-fields-terminated-by "\001" \
+--num-mappers 1
+
+=====================================================================================
+
+Sqoop Export – Stage Tables
+
+
+Stage tables
+Launch Hive and Insert the data into the table
+insert into table daily_revenue
+ select order_date, sum(order_item_subtotal) daily_revenue
+ from orders join order_items on
+ order_id = order_item_order_id
+ where order_date > '2013-08'
+ group by order_date;
+sqoop export \ 
+--connect jdbc:mysql://ms.itversity.com:3306/ retail_export \
+--username retail_user \ 
+--password itversity \ 
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \ --table daily_revenue \ --input-fields-terminated-by "\001"
+Creating stage table
+create table daily_revenue_stage (
+order_date varchar(30) primary key,
+revenue float
+);
+Insert values into the table
+insert into daily_revenue values ("2014-07-01 00:00:00.0", 0);
+Run the stage table
+sqoop export \
+--connect jdbc:mysql://ms.itversity.com:3306/ retail_export \
+--username retail_user \
+--password itversity \
+--export-dir /apps/hive/warehouse/dgadiraju_sqoop_import.db/daily_revenue \ --table daily_revenue \
+--staging-table daily_revenue_stage \
+--input-fields-terminated-by "\001"
+
+=====================================================================================================
+
